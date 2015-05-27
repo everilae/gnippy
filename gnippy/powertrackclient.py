@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
 
 import threading
-
 import requests
-
 from gnippy import config
-
 from contextlib import closing
+
 
 class PowerTrackClient():
     """
@@ -68,8 +66,12 @@ class Worker(threading.Thread):
 
     def run(self):
         with closing(requests.get(self.url, auth=self.auth, stream=True)) as r:
+            # Let user know if something went wrong
+            r.raise_for_status()
+
             for line in r.iter_lines():
                 if self.stopped():
                     break
+
                 elif line:
                     self.on_data(line)
