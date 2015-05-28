@@ -11,24 +11,51 @@ class PowerTrackClient():
         PowerTrackClient allows you to connect to the GNIP
         power track stream and fetch data.
     """
-    callback = None
-    url = None
-    auth = None
 
     def __init__(self, callback, **kwargs):
-        self.callback = callback
+        """
+        :param callback: On data callback for :class:`Worker`
+        :param url: stream url
+        :param auth: stream authentication, ``(account, password)`` tuple
+        """
         c = config.resolve(kwargs)
+
+        self.callback = callback
         self.url = c['url']
         self.auth = c['auth']
+        self.worker = None
 
     def connect(self):
+        """
+        Create a :class:`Worker` daemon and start consuming :attr:`url`.
+
+        :raises RuntimeError: if called more than once per client.
+        """
+        if self.worker:
+            raise RuntimeError(
+                "Cannot connect: PowerTrackClient is not re-entrant")
+
         self.worker = Worker(self.url, self.auth, self.callback)
-        self.worker.setDaemon(True)
+        self.worker.daemon = True
         self.worker.start()
 
-    def disconnect(self):
+    def wait(self, timeout=None):
+        """
+        Wait on :attr:`worker` for ``timeout`` seconds or indefinitely if None
+        or not provided.
+
+        :returns: True if :attr:`worker` is alive, False otherwise.
+        """
+        self.worker.join(timeout=timeout)
+        return self.worker.is_alive()
+
+    def disconnect(self, timeout=None):
+        """
+        Kindly ask :attr:`worker` to stop and :meth:`wait`. :class:`Worker`
+        may block for long(ish) periods before stopping.
+        """
         self.worker.stop()
-        self.worker.join()
+        return self.wait(timeout=timeout)
 
     def load_config_from_file(self, url, auth, config_file_path):
         """ Attempt to load the config from a file. """
@@ -62,16 +89,18 @@ class Worker(threading.Thread):
         self._stop_event.set()
 
     def stopped(self):
-        return self._stop_event.isSet()
+        return self._stop_event.is_set()
+
+    def stream(self, response):
+        for line in response.iter_lines():
+            if line:
+                self.on_data(line)
+
+            if self.stopped():
+                break
 
     def run(self):
         with closing(requests.get(self.url, auth=self.auth, stream=True)) as r:
             # Let user know if something went wrong
             r.raise_for_status()
-
-            for line in r.iter_lines():
-                if self.stopped():
-                    break
-
-                elif line:
-                    self.on_data(line)
+            self.stream(r)
