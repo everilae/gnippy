@@ -70,13 +70,16 @@ def get_config(config_file_path=None):
 def resolve(kwarg_dict):
     """
     Look for auth and url info in the kwargs.
-    If they don't exist, look for a config file path and resolve auth & url info from it.
-    If no config file path exists, try to load the config file from the default path.
-    If this method returns without errors, the dictionary is guaranteed to contain:
-    {
-        "auth": ("username", "password"),
-        "url": "PowerTrackUrl"
-    }
+    If they don't exist, look for a config file path and resolve auth & url
+    info from it. If no config file path exists, try to load the config file
+    from the default path. If this method returns without errors, the
+    dictionary is guaranteed to contain::
+
+        {
+            "auth": ("username", "password"),
+            "url": "PowerTrackUrl"
+        }
+
     """
     conf = {}
     if "auth" in kwarg_dict:
