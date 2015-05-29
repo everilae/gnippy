@@ -13,3 +13,9 @@ if PY2:
 else:
     text_type = str
     string_types = str
+
+try:
+    import configparser
+
+except ImportError:
+    import ConfigParser as configparser

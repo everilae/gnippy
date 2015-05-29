@@ -1,20 +1,16 @@
 # -*- coding: utf-8 -*-
 
-try:
-    import configparser as ConfigParser
-
-except ImportError:
-    import ConfigParser
-
+from gnippy.compat import configparser
 import os
 
-from gnippy.errors import ConfigFileNotFoundException, IncompleteConfigurationException
+from gnippy.errors import (ConfigFileNotFoundException,
+                           IncompleteConfigurationException)
 
 
 def get_default_config_file_path():
     """
-        Returns the absolute path to the default placement of the
-        config file (~/.gnippy)
+    Returns the absolute path to the default placement of the
+    config file (~/.gnippy)
     """
     # --- This section has been borrowed from boto ------------------------
     # Copyright (c) 2006,2007 Mitch Garnaat http://garnaat.org/
@@ -36,16 +32,17 @@ def get_default_config_file_path():
 
 def get_config(config_file_path=None):
     """
-        Parses the .gnippy file at the provided location.
-        Returns a dictionary with all the possible configuration options,
-        with None for the options that were not provided.
+    Parses the .gnippy file at the provided location.
+    Returns a dictionary with all the possible configuration options,
+    with None for the options that were not provided.
     """
     if not os.path.isfile(config_file_path):
-        raise ConfigFileNotFoundException("Could not find %s" % config_file_path)
+        raise ConfigFileNotFoundException(
+            "Could not find %s" % config_file_path)
 
     # Attempt to parse the config file
     result = {}
-    parser = ConfigParser.SafeConfigParser()
+    parser = configparser.SafeConfigParser()
     parser.read(config_file_path)
 
     # These are all the configurable settings by setting
@@ -60,9 +57,9 @@ def get_config(config_file_path=None):
         for key in keys:
             try:
                 values[key] = parser.get(section, key)
-            except ConfigParser.NoOptionError:
+            except configparser.NoOptionError:
                 values[key] = None
-            except ConfigParser.NoSectionError:
+            except configparser.NoSectionError:
                 values[key] = None
 
         result[section] = values
@@ -72,14 +69,14 @@ def get_config(config_file_path=None):
 
 def resolve(kwarg_dict):
     """
-        Look for auth and url info in the kwargs.
-        If they don't exist, look for a config file path and resolve auth & url info from it.
-        If no config file path exists, try to load the config file from the default path.
-        If this method returns without errors, the dictionary is guaranteed to contain:
-        {
-            "auth": ("username", "password"),
-            "url": "PowerTrackUrl"
-        }
+    Look for auth and url info in the kwargs.
+    If they don't exist, look for a config file path and resolve auth & url info from it.
+    If no config file path exists, try to load the config file from the default path.
+    If this method returns without errors, the dictionary is guaranteed to contain:
+    {
+        "auth": ("username", "password"),
+        "url": "PowerTrackUrl"
+    }
     """
     conf = {}
     if "auth" in kwarg_dict:
@@ -90,10 +87,12 @@ def resolve(kwarg_dict):
 
     if "auth" not in conf or "url" not in conf:
         if "config_file_path" in kwarg_dict:
-            file_conf = get_config(config_file_path=kwarg_dict['config_file_path'])
+            file_conf = get_config(
+                config_file_path=kwarg_dict['config_file_path'])
 
         else:
-            file_conf = get_config(config_file_path=get_default_config_file_path())
+            file_conf = get_config(
+                config_file_path=get_default_config_file_path())
 
         if "auth" not in conf:
             creds = file_conf['Credentials']
@@ -108,6 +107,7 @@ def resolve(kwarg_dict):
             if file_conf['PowerTrack']['url']:
                 conf['url'] = file_conf['PowerTrack']['url']
             else:
-                raise IncompleteConfigurationException("Please provide a PowerTrack url.")
+                raise IncompleteConfigurationException(
+                    "Please provide a PowerTrack url.")
 
     return conf
