@@ -204,7 +204,7 @@ class PowerTrackJob(object):
 
     def accept(self, auth):
         """
-        Accepts or rejects a historical job in the "quoted" stage.
+        Accepts a historical job in the "quoted" stage.
         Accepted jobs will be run by Gnip's system, and cannot be stopped
         after acceptance.
 
