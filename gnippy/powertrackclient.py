@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
+from contextlib import closing
 import threading
 import requests
 from gnippy import config
-from contextlib import closing
 
 
 class PowerTrackClient():
