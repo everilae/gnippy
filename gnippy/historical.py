@@ -1,11 +1,20 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, division, print_function
 
+import json
 import requests
 from gnippy import config
-from gnippy.errors import BadArgumentException
+from gnippy.errors import BadArgumentException, HistoricalJobStatusException
 from gnippy.compat import text_type
 from datetime import datetime
+
+
+def iso8601_to_dt(s):
+    """
+    Ugly, but sort of works. Why oh why doesn't python stdlib properly
+    support ISO8601.
+    """
+    return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ")
 
 
 class PowerTrackJob(object):
@@ -20,7 +29,7 @@ class PowerTrackJob(object):
             PowerTrack (``"track"``) is available.
 
         data_format (str): The data format to use for the job. Defaults to
-            ``"activity-stream"`` To request data in the Publisher's
+            ``"activity-stream"``. To request data in the Publisher's
             original/native format use ``"original"``.
 
         from_date (datetime): A naive datetime indicating the start time of the
@@ -76,7 +85,171 @@ class PowerTrackJob(object):
         self.title = title
         self.rules = rules
 
+        self._account = None
+        self._requested_by = None
+        self._requested_at = None
+        self._status = None
+        self._status_message = None
+        self._job_url = None
+        self._quote = None
+        self._accepted_by = None
+        self._accepted_at = None
+        self._percent_complete = None
+        self._results = None
+
         self._validate()
+
+    def _update(self, data):
+        self._account = data['account']
+        self._job_url = data['jobUrl']
+        self._requested_by = data['requestedBy']
+        self._requested_at = iso8601_to_dt(data['requestedAt'])
+        self._status = data['status']
+        self._status_message = data['statusMessage']
+        self._quote = data.get('quote')
+        self._accepted_by = data.get('acceptedBy')
+        if 'acceptedAt' in data:
+            self._accepted_at = iso8601_to_dt(data['acceptedAt'])
+        self._percent_complete = data.get('percentComplete')
+        self._results = data.get('results')
+
+    @staticmethod
+    def _get(job_url, auth):
+        r = requests.get(job_url, auth=auth)
+        r.raise_for_status()
+        return r.json()
+
+    @classmethod
+    def get(cls, job_url, auth):
+        """
+        Get a monitor to an existing job. Will not include original
+        :attr:`rules`.
+
+        See :meth:`monitor`.
+
+        Args:
+            job_url: job instance url
+            auth: authentication, ``("account", "password")`` tuple
+        """
+        data = cls._get(job_url, auth)
+        obj = cls(
+            title=data['title'],
+            from_date=iso8601_to_dt(data['fromDate']),
+            to_date=iso8601_to_dt(data['toDate']),
+            rules=data.get('rules', []),  # unfortunate
+            publisher=data['publisher'],
+            stream_type=data['streamType'],
+            data_format=data['dataFormat']
+        )
+        cls._update(obj, data)
+
+        return obj
+
+    def monitor(self, auth):
+        """
+        Monitors the status of a historical job.
+
+        After a job is created, you can use this request to monitor the current
+        status of the specific job.
+
+        When the job is in the process of generating an estimate of expected
+        order of magnitude of activity volume and time required, this request
+        provides insight into the progress in the estimating process. Once this
+        estimate is complete, the response will indicate the volume and time
+        estimates referenced.
+
+        After the job has been accepted, the response can be used to track its
+        progress as the data files are generated.
+
+        Args:
+            auth: authentication, ``("account", "password")`` tuple
+        """
+        data = self._get(self._job_url, auth)
+        self._update(data)
+
+    def _accept_or_reject(self, verb, auth):
+        if self._status != "quoted":
+            raise HistoricalJobStatusException
+
+        r = requests.put(self._job_url, auth=auth,
+                         data=json.dumps(dict(status=verb)))
+        r.raise_for_status()
+        data = r.json()
+        self._status = data['status']
+        self._status_message = data['statusMessage']
+        self._accepted_by = data['acceptedBy']
+        self._accepted_at = iso8601_to_dt(data['acceptedAt'])
+
+    def accept(self, auth):
+        """
+        Accepts or rejects a historical job in the "quoted" stage.
+        Accepted jobs will be run by Gnip's system, and cannot be stopped
+        after acceptance.
+
+        Args:
+            auth: authentication, ``("account", "password")`` tuple.
+
+        Raises:
+            HistoricalJobStatusException: if job is not in status "quoted".
+        """
+        self._accept_or_reject("accept", auth)
+
+    def reject(self, auth):
+        """
+        Rejects a historical job in the "quoted" stage.
+        Rejected jobs cannot be recovered.
+
+        Args:
+            auth: authentication, ``("account", "password")`` tuple.
+
+        Raises:
+            HistoricalJobStatusException: if job is not in status "quoted".
+        """
+        self._accept_or_reject("reject", auth)
+
+    @property
+    def account(self):
+        return self._account
+
+    @property
+    def requested_by(self):
+        return self._requested_by
+
+    @property
+    def requsted_at(self):
+        return self._requested_at
+
+    @property
+    def status(self):
+        return self._status
+
+    @property
+    def status_message(self):
+        return self._status_message
+
+    @property
+    def job_url(self):
+        return self._job_url
+
+    @property
+    def quote(self):
+        return self._quote
+
+    @property
+    def accepted_by(self):
+        return self._accepted_by
+
+    @property
+    def accepted_at(self):
+        return self._accepted_at
+
+    @property
+    def percent_complete(self):
+        return self._percent_complete
+
+    @property
+    def results(self):
+        return self._results
 
     def _validate(self):
         if self.publisher != "twitter":
@@ -118,10 +291,13 @@ class PowerTrackJob(object):
 
 class HistoricalPowerTrackClient(object):
     """
+    Historical PowerTrack client.
+
+    Args:
+        auth: authentication, ``("account", "password")`` tuple
     """
 
     def __init__(self, **kwargs):
         c = config.resolve(kwargs)
 
-        self.url = c['url']
         self.auth = c['auth']
