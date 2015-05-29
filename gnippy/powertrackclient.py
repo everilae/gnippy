@@ -8,16 +8,21 @@ from gnippy import config
 
 class PowerTrackClient():
     """
-        PowerTrackClient allows you to connect to the GNIP
-        power track stream and fetch data.
+    PowerTrackClient allows you to connect to the GNIP
+    power track stream and fetch data.
+
+    Args:
+        callback: On data callback for :class:`Worker`
+        url: stream url
+        auth: stream authentication, ``("account", "password")`` tuple
+
+    Attributes:
+        worker: ``None`` or current :class:`Worker` if :meth:`connect`
+            successful.
+
     """
 
     def __init__(self, callback, **kwargs):
-        """
-        :param callback: On data callback for :class:`Worker`
-        :param url: stream url
-        :param auth: stream authentication, ``(account, password)`` tuple
-        """
         c = config.resolve(kwargs)
 
         self.callback = callback
@@ -29,7 +34,8 @@ class PowerTrackClient():
         """
         Create a :class:`Worker` daemon and start consuming :attr:`url`.
 
-        :raises RuntimeError: if called more than once per client.
+        Raises:
+                RuntimeError: if called more than once per client.
         """
         if self.worker:
             raise RuntimeError(
@@ -41,10 +47,15 @@ class PowerTrackClient():
 
     def wait(self, timeout=None):
         """
-        Wait on :attr:`worker` for ``timeout`` seconds or indefinitely if None
-        or not provided.
+        Wait on :attr:`worker` for ``timeout`` seconds or indefinitely if
+        ``None`` or not provided.
 
-        :returns: True if :attr:`worker` is alive, False otherwise.
+        Args:
+            timeout (float): timeout in fractional seconds or ``None``.
+
+        Returns:
+                bool:
+                ``True`` if :attr:`worker` is alive, ``False`` otherwise.
         """
         self.worker.join(timeout=timeout)
         return self.worker.is_alive()
@@ -58,7 +69,9 @@ class PowerTrackClient():
         return self.wait(timeout=timeout)
 
     def load_config_from_file(self, url, auth, config_file_path):
-        """ Attempt to load the config from a file. """
+        """
+        Attempt to load the config from a file.
+        """
         conf = config.get_config(config_file_path=config_file_path)
 
         if url is None:
@@ -77,7 +90,9 @@ class PowerTrackClient():
 
 
 class Worker(threading.Thread):
-    """ Background worker to fetch data without blocking """
+    """
+    Background worker to fetch data without blocking
+    """
     def __init__(self, url, auth, callback):
         super(Worker, self).__init__()
         self.url = url

@@ -67,13 +67,14 @@ def _check_rules_list(rules_list):
 def _post(conf, built_rules):
     """
     Generate the Rules URL and POST data and make the POST request.
-    POST data must look like:
-    {
-        "rules": [
-                    {"value":"rule1", "tag":"tag1"},
-                    {"value":"rule2"}
-                 ]
-    }
+    POST data must look like::
+
+        {
+            "rules": [
+                        {"value":"rule1", "tag":"tag1"},
+                        {"value":"rule2"}
+                     ]
+        }
 
     Args:
         conf: A configuration object that contains auth and url info.
@@ -92,13 +93,14 @@ def _post(conf, built_rules):
 def _delete(conf, built_rules):
     """
     Generate the Rules URL and make a DELETE request.
-    DELETE data must look like:
-    {
-        "rules": [
-                    {"value":"rule1", "tag":"tag1"},
-                    {"value":"rule2"}
-                 ]
-    }
+    DELETE data must look like::
+
+        {
+            "rules": [
+                        {"value":"rule1", "tag":"tag1"},
+                        {"value":"rule2"}
+                     ]
+        }
 
     Args:
         conf: A configuration object that contains auth and url info.
@@ -115,8 +117,11 @@ def _delete(conf, built_rules):
 
 def build(rule_string, tag=None):
     """
-    Takes a rule string and optional tag and turns it into a "built_rule" that looks like:
-    { "value": "rule string", "tag": "my tag" }
+    Takes a rule string and optional tag and turns it into a "built_rule"
+    that looks like::
+
+        { "value": "rule string", "tag": "my tag" }
+
     """
     if rule_string is None:
         raise BadArgumentException("rule_string cannot be None")
@@ -147,16 +152,23 @@ def add_rules(rules_list, **kwargs):
 def get_rules(**kwargs):
     """
     Get all the rules currently applied to PowerTrack.
-    Optional Args:
-        url: Specify this arg if you're working with a PowerTrack connection that's not listed in your .gnippy file.
-        auth: Specify this arg if you want to override the credentials in your .gnippy file.
+
+    Args:
+        url: Specify this arg if you're working with a PowerTrack connection
+            that's not listed in your .gnippy file.
+
+        auth: Specify this arg if you want to override the credentials in your
+            .gnippy file.
 
     Returns:
-        A list of currently applied rules in the form:
-        [
-            { "value": "(Hello OR World) AND lang:en" },
-            { "value": "Hello", "tag": "mytag" }
-        ]
+        list:
+        A list of currently applied rules in the form::
+
+            [
+                { "value": "(Hello OR World) AND lang:en" },
+                { "value": "Hello", "tag": "mytag" }
+            ]
+
     """
     conf = config.resolve(kwargs)
     rules_url = _generate_rules_url(conf['url'])
