@@ -11,8 +11,8 @@ from datetime import datetime
 
 def iso8601_to_dt(s):
     """
-    Ugly, but sort of works. Why oh why doesn't python stdlib properly
-    support ISO8601.
+    Helper function for a very naive conversion of very specific ISO8601
+    strings to python ``datetime`` objects.
     """
     return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ")
 
