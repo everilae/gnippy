@@ -14,6 +14,7 @@ Contents:
    gnippy_config
    gnippy_rules
    gnippy_powertrackclient
+   gnippy_historical
    gnippy_errors
 
 Indices and tables
