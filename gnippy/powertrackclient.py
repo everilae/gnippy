@@ -6,7 +6,7 @@ import requests
 from gnippy import config
 
 
-class PowerTrackClient():
+class PowerTrackClient(object):
     """
     PowerTrackClient allows you to connect to the GNIP
     power track stream and fetch data.
