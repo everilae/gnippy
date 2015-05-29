@@ -145,6 +145,29 @@ class PowerTrackJob(object):
 
         return obj
 
+    @staticmethod
+    def _format_date(dt):
+        return dt.strftime("%Y%m%d%H%M")
+
+    def post(self, auth):
+        """
+        Creates a new Historical PowerTrack job from this instance.
+
+        Args:
+            auth: authentication, ``("account", "password")`` tuple
+        """
+        r = requests.post("MAGICAPIURLFROMSOMEWHERE", auth=auth, data=json.dumps(dict(
+            publisher=self.publisher,
+            streamType=self.stream_type,
+            dataFormat=self.data_format,
+            fromDate=self._format_date(self.from_date),
+            toDate=self._format_date(self.to_date),
+            title=self.title,
+            rules=self.rules
+        )))
+        r.raise_for_status()
+        self._update(r.json())
+
     def monitor(self, auth):
         """
         Monitors the status of a historical job.
@@ -164,8 +187,7 @@ class PowerTrackJob(object):
         Args:
             auth: authentication, ``("account", "password")`` tuple
         """
-        data = self._get(self._job_url, auth)
-        self._update(data)
+        self._update(self._get(self._job_url, auth))
 
     def _accept_or_reject(self, verb, auth):
         if self._status != "quoted":
