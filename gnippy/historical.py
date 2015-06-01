@@ -29,7 +29,7 @@ class PowerTrackJob(object):
             PowerTrack (``"track"``) is available.
 
         data_format (str): The data format to use for the job. Defaults to
-            ``"activity-stream"``. To request data in the Publisher's
+            ``"activity-streams"``. To request data in the Publisher's
             original/native format use ``"original"``.
 
         from_date (datetime): A naive datetime indicating the start time of the
@@ -67,7 +67,7 @@ class PowerTrackJob(object):
 
     """
 
-    VALID_DATA_FORMATS = {"activity-stream", "original"}
+    VALID_DATA_FORMATS = {"activity-streams", "original"}
 
     def __init__(self,
                  title=None,
@@ -76,7 +76,7 @@ class PowerTrackJob(object):
                  rules=None,
                  publisher="twitter",
                  stream_type="track",
-                 data_format="activity-stream"):
+                 data_format="activity-streams"):
         self.publisher = publisher
         self.stream_type = stream_type
         self.data_format = data_format
@@ -149,14 +149,14 @@ class PowerTrackJob(object):
     def _format_date(dt):
         return dt.strftime("%Y%m%d%H%M")
 
-    def post(self, auth):
+    def post(self, api_url, auth):
         """
         Creates a new Historical PowerTrack job from this instance.
 
         Args:
             auth: authentication, ``("account", "password")`` tuple
         """
-        r = requests.post("MAGICAPIURLFROMSOMEWHERE", auth=auth, data=json.dumps(dict(
+        r = requests.post(api_url, auth=auth, data=json.dumps(dict(
             publisher=self.publisher,
             streamType=self.stream_type,
             dataFormat=self.data_format,
