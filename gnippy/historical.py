@@ -17,6 +17,61 @@ def iso8601_to_dt(s):
     return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ")
 
 
+class PowerTrackJobResults(object):
+    """
+    Historical PowerTrack job result.
+
+    Args:
+        completed_at:
+        activity_count:
+        file_count:
+        file_size_mb:
+        data_url:
+        expires_at:
+        client:
+    """
+
+    def __init__(self,
+                 completed_at=None,
+                 activity_count=None,
+                 file_count=None,
+                 file_size_mb=None,
+                 data_url=None,
+                 expires_at=None,
+                 client=None):
+        self.completed_at = completed_at
+        self.activity_count = activity_count
+        self.file_count = file_count
+        self.file_size_mb = file_size_mb
+        self.data_url = data_url
+        self.expires_at = expires_at
+
+        self._client = client
+
+        self._url_count = None
+        self._url_list = None
+        self._total_file_size_bytes = None
+        self._suspect_minutes_url = None
+        self._expires_at = None
+
+    def get(self):
+        """
+        Retrieves information about a completed Historical PowerTrack job,
+        including a list of URLs which correspond to the data files generated
+        for a completed historical job. These URLs will be used to download the
+        Twitter data files.
+        """
+        r = requests.get(self.data_url, auth=self._client.auth)
+        r.raise_for_status()
+        data = r.json()
+        self._url_count = data['urlCount']
+        self._url_list = data['urlList']
+        self._total_file_size_bytes = data['totalFileSizeBytes']
+        self._suspect_minutes_url = data.get('suspectMinutesUrl')
+        self._expires_at = iso8601_to_dt(data['expires_at'])
+
+
+
 class PowerTrackJob(object):
     """
     Historical PowerTrack job.
@@ -61,6 +116,9 @@ class PowerTrackJob(object):
                         "tag": "pets"
                     }
                 ]
+
+        client (HistoricalPowerTrackClient): The client instance that created
+            this job.
 
     Raises:
         BadArgumentException: for invalid arguments.
@@ -108,10 +166,29 @@ class PowerTrackJob(object):
         self._status_message = data['statusMessage']
         self._quote = data.get('quote')
         self._accepted_by = data.get('acceptedBy')
+
         if 'acceptedAt' in data:
             self._accepted_at = iso8601_to_dt(data['acceptedAt'])
+
+        else:
+            self._accepted_at = None
+
         self._percent_complete = data.get('percentComplete')
-        self._results = data.get('results')
+
+        if 'results' in data:
+            results = data['results']
+            self._results = PowerTrackJobResults(
+                completed_at=iso8601_to_dt(results['completedAt']),
+                activity_count=results['activityCount'],
+                file_count=results['fileCount'],
+                file_size_mb=results['fileSizeMb'],
+                data_url=results['dataUrl'],
+                expires_at=iso8601_to_dt(results['expiresAt']),
+                client=self._client
+            )
+
+        else:
+            self._results = None
 
     @staticmethod
     def _get(job_url, auth):
@@ -120,7 +197,7 @@ class PowerTrackJob(object):
         return r.json()
 
     @classmethod
-    def get(cls, job_url, auth):
+    def get(cls, job_url, client):
         """
         Get a monitor to an existing job. Will not include original
         :attr:`rules`.
@@ -128,10 +205,15 @@ class PowerTrackJob(object):
         See :meth:`monitor`.
 
         Args:
-            job_url: job instance url
-            auth: authentication, ``("account", "password")`` tuple
+            job_url (str): job instance url
+            client (HistoricalPowerTrackClient): client
+
+        Returns:
+            PowerTrackJob:
+            Job instance for given url.
+
         """
-        data = cls._get(job_url, auth)
+        data = cls._get(job_url, auth=client.auth)
         obj = cls(
             title=data['title'],
             from_date=iso8601_to_dt(data['fromDate']),
@@ -139,7 +221,8 @@ class PowerTrackJob(object):
             rules=data.get('rules', []),  # unfortunate
             publisher=data['publisher'],
             stream_type=data['streamType'],
-            data_format=data['dataFormat']
+            data_format=data['dataFormat'],
+            client=client
         )
         cls._update(obj, data)
 
@@ -149,14 +232,11 @@ class PowerTrackJob(object):
     def _format_date(dt):
         return dt.strftime("%Y%m%d%H%M")
 
-    def post(self, api_url, auth):
+    def post(self):
         """
         Creates a new Historical PowerTrack job from this instance.
-
-        Args:
-            auth: authentication, ``("account", "password")`` tuple
         """
-        r = requests.post(api_url, auth=auth, data=json.dumps(dict(
+        data = json.dumps(dict(
             publisher=self.publisher,
             streamType=self.stream_type,
             dataFormat=self.data_format,
@@ -164,11 +244,13 @@ class PowerTrackJob(object):
             toDate=self._format_date(self.to_date),
             title=self.title,
             rules=self.rules
-        )))
+        ))
+        r = requests.post(self._client.api_url, auth=self._client.auth,
+                          data=data)
         r.raise_for_status()
         self._update(r.json())
 
-    def monitor(self, auth):
+    def monitor(self):
         """
         Monitors the status of a historical job.
 
@@ -183,17 +265,14 @@ class PowerTrackJob(object):
 
         After the job has been accepted, the response can be used to track its
         progress as the data files are generated.
-
-        Args:
-            auth: authentication, ``("account", "password")`` tuple
         """
-        self._update(self._get(self._job_url, auth))
+        self._update(self._get(self._job_url, self._client.auth))
 
-    def _accept_or_reject(self, verb, auth):
+    def _accept_or_reject(self, verb):
         if self._status != "quoted":
             raise HistoricalJobStatusException
 
-        r = requests.put(self._job_url, auth=auth,
+        r = requests.put(self._job_url, auth=self._client.auth,
                          data=json.dumps(dict(status=verb)))
         r.raise_for_status()
         data = r.json()
@@ -202,32 +281,28 @@ class PowerTrackJob(object):
         self._accepted_by = data['acceptedBy']
         self._accepted_at = iso8601_to_dt(data['acceptedAt'])
 
-    def accept(self, auth):
+    def accept(self):
         """
         Accepts a historical job in the "quoted" stage.
         Accepted jobs will be run by Gnip's system, and cannot be stopped
         after acceptance.
 
-        Args:
-            auth: authentication, ``("account", "password")`` tuple.
-
         Raises:
             HistoricalJobStatusException: if job is not in status "quoted".
-        """
-        self._accept_or_reject("accept", auth)
 
-    def reject(self, auth):
+        """
+        self._accept_or_reject("accept")
+
+    def reject(self):
         """
         Rejects a historical job in the "quoted" stage.
         Rejected jobs cannot be recovered.
 
-        Args:
-            auth: authentication, ``("account", "password")`` tuple.
-
         Raises:
             HistoricalJobStatusException: if job is not in status "quoted".
+
         """
-        self._accept_or_reject("reject", auth)
+        self._accept_or_reject("reject")
 
     @property
     def account(self):
@@ -316,10 +391,78 @@ class HistoricalPowerTrackClient(object):
     Historical PowerTrack client.
 
     Args:
+        api_url: historical powertrack api url
         auth: authentication, ``("account", "password")`` tuple
+
     """
 
     def __init__(self, **kwargs):
         c = config.resolve(kwargs)
 
+        # For the time being handle this as kwarg only, add it to the
+        # configuration machinery later.
+        self.api_url = kwargs['api_url']
         self.auth = c['auth']
+
+    def create_job(self, **kwgs):
+        """
+        Create a new :class:`PowerTrackJob` bound to this client.
+
+        Args:
+            publisher (str): The data publisher you want the historical job to use.
+                Currently ``"twitter"`` only.
+
+            stream_type (str): Type of "stream" used for the job. Currently only
+                PowerTrack (``"track"``) is available.
+
+            data_format (str): The data format to use for the job. Defaults to
+                ``"activity-streams"``. To request data in the Publisher's
+                original/native format use ``"original"``.
+
+            from_date (datetime): A naive datetime indicating the start time of the
+                period of interest with minute granularity. This date is inclusive,
+                meaning the minute specified will be included in the job.
+
+            to_date (datetime): A naive datetime indicating the end time of the
+                period of interest with minute granularity. This is **NOT**
+                inclusive, so a time of 00:00 will return data through 23:59 of
+                previous day. I.e. the specified minute will not be included in the
+                job, but the minute immediately preceeding it will in the UTC time
+                zone.
+
+            title (str): A title for the historical job. This must be unique and
+                jobs with duplicate titles will be rejected.
+
+            rules (list): The rules which will determine what data is returned by
+                your job. Historical PowerTrack jobs support up to 1000 PowerTrack
+                rules. For information on PowerTrack rules, see our documentation
+                here, and be sure to consider the caveats listed here.
+                For example::
+
+                    [
+                        {
+                            "value": "cow"
+                        },
+                        {
+                            "value": "dog",
+                            "tag": "pets"
+                        }
+                    ]
+
+        Returns:
+            PowerTrackJob:
+            New historical powertrack job.
+
+        """
+        job = PowerTrackJob(client=self, **kwgs)
+        #job.post()
+        return job
+
+    def get_job(self, job_url):
+        """
+        Returns:
+            PowerTrackJob:
+            PowerTrack job for url.
+
+        """
+        return PowerTrackJob.get(job_url, self)
